@@ -9,7 +9,7 @@ API_TOKEN = '5098673114:AAHTLpXaLEBKsVyZChzzDO0u1_B2OqflwfQ'
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
-wait_seconds = 1800
+wait_seconds = 150
 last_time_banned = datetime.datetime.now() - datetime.timedelta(seconds=wait_seconds)
 massive = [1 for i in users]
 
@@ -29,7 +29,6 @@ def form_repr(num):
             else:
                 out += f'— {person.name}{"" if person.surname is None else " " + str(person.surname)},\n'
     return out
-
 
 
 @dp.message_handler(commands=['ban'])
@@ -53,11 +52,11 @@ async def kill_sbd(message: types.Message):
             massive[num1] = 0
             massive[num2] = 0
             await bot.edit_message_text(form_repr(num_to_ban), message.chat.id, last_message.message_id)
-        sleep(5)
+        sleep(4)
         await bot.edit_message_text(
-            f'{users[num_to_ban].name} {"" if users[num_to_ban].surname is None else " " + str(users[num_to_ban].surname) + " "}забанен на час{emojize(":smiling_face_with_horns:")}',
+            f'{users[num_to_ban].name} {"" if users[num_to_ban].surname is None else " " + str(users[num_to_ban].surname) + " "}забанен на 5 минут{emojize(":smiling_face_with_horns:")}',
             message.chat.id, last_message.message_id)
-        await bot.ban_chat_member(message.chat.id, users[num_to_ban].user_id, int(time() + 3600))
+        await bot.restrict_chat_member(message.chat.id, users[num_to_ban].user_id, can_send_messages=False, until_date=int((time() + 300)))
     else:
         await bot.send_message(message.chat.id,
                                f'До использования команды заново осталось {wait_seconds - delta.seconds} секунд')
