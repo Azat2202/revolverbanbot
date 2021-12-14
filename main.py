@@ -53,7 +53,7 @@ async def kill_sbd(message: types.Message):
             massive[num1] = 0
             massive[num2] = 0
             await bot.edit_message_text(form_repr(num_to_ban), message.chat.id, last_message.message_id)
-        sleep(4)
+        sleep(5)
         await bot.edit_message_text(
             f'{users[num_to_ban].name} {"" if users[num_to_ban].surname is None else " " + str(users[num_to_ban].surname) + " "}забанен на час{emojize(":smiling_face_with_horns:")}',
             message.chat.id, last_message.message_id)
