@@ -57,7 +57,7 @@ async def kill_sbd(message: types.Message):
         await bot.edit_message_text(
             f'{users[num_to_ban].name} {"" if users[num_to_ban].surname is None else " " + str(users[num_to_ban].surname) + " "}забанен на час{emojize(":smiling_face_with_horns:")}',
             message.chat.id, last_message.message_id)
-        await bot.kick_chat_member(message.chat.id, users[num_to_ban].user_id, int(time() + 3600))
+        await bot.ban_chat_member(message.chat.id, users[num_to_ban].user_id, int(time() + 3600))
     else:
         await bot.send_message(message.chat.id,
                                f'До использования команды заново осталось {wait_seconds - delta.seconds} секунд')
