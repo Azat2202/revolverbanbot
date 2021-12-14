@@ -41,8 +41,7 @@ async def kill_sbd(message: types.Message):
         massive = [1 for i in users]
         last_time_banned = now_time
         last_message = await message.reply(form_repr(-1))
-        # num_to_ban = randint(0, len(users) - 1)
-        num_to_ban = 0
+        num_to_ban = randint(0, len(users) - 1)
         while sum(massive) != 1:
             sleep(sum(massive) / 100)
             num1 = randint(0, len(users) - 1)
