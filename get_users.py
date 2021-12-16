@@ -13,6 +13,7 @@ class user:
     user_id: int
     name: str
     surname: str
+    username: str
 
 
 
@@ -33,7 +34,7 @@ client.start()
 count = 0
 for participant in client.get_participants(channel_id):
     if not participant.bot:
-        users.append(user(participant.id, participant.first_name, participant.last_name))
+        users.append(user(participant.id, participant.first_name, participant.last_name, participant.username))
 # for participant in client.iter_participants(channel_id, aggressive=True):
 #     users.append(user(participant.id, participant.first_name, participant.last_name))
 client.disconnect()
