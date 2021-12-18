@@ -13,8 +13,8 @@ API_TOKEN = '5098673114:AAHTLpXaLEBKsVyZChzzDO0u1_B2OqflwfQ'
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 wait_seconds = 150
-wait_seconds_for_horo = 86400
-wait_seconds_for_mention = 18000
+wait_seconds_for_horo = 30000
+wait_seconds_for_mention = 5000
 last_time_banned = datetime.datetime.now() - datetime.timedelta(seconds=wait_seconds)
 last_time_horo = datetime.datetime.now() - datetime.timedelta(days=1)
 last_time_mentioned = datetime.datetime.now() - datetime.timedelta(seconds=wait_seconds_for_mention)
@@ -47,7 +47,7 @@ async def solo_horo(message: types.Message):
     if delta.seconds > wait_seconds_for_horo or delta.days > 0:
         last_time_horo = now_time
         for person in users:
-            today_horo = get_wishes()
+            today_horo = get_wishes(users)
             out += f'[{person.name}](tg://user?id={person.user_id}){choice(today_horo)}\n'
         await bot.send_message(message.chat.id, out, parse_mode='Markdown', reply_to_message_id=message.message_id)
     else:
@@ -74,7 +74,7 @@ async def mark_all(message: types.Message):
 
 @dp.message_handler(commands=['horo'])
 async def all_horo(message: types.Message):
-    today_horo = get_wishes()
+    today_horo = get_wishes(users)
     out = f'{message.from_user.first_name}{"" if message.from_user.last_name is None else " " + str(message.from_user.last_name)}{choice(today_horo)}'
     await bot.send_message(message.chat.id, out, reply_to_message_id=message.message_id)
 

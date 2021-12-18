@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 import sys
 import os
 import time
+
 API_TOKEN = '5098673114:AAHTLpXaLEBKsVyZChzzDO0u1_B2OqflwfQ'
 users = []
 channel_id = -1001458827756
@@ -14,7 +15,6 @@ class user:
     name: str
     surname: str
     username: str
-
 
 
 def get_env(name, message, cast=str):
