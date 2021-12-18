@@ -122,5 +122,21 @@ async def connection(message: types.Message):
         await message.reply(f'Ты и {message.text[14::]} вместе с шансом {randint(0, 100)}%')
 
 
+@dp.message_handler(filters.Text(startswith='Вопрос', ignore_case=True))
+async def yn(message: types.Message):
+    await message.reply(choice(['Да', "Нет"]))
+
+
+@dp.message_handler(filters.Text(startswith='Важный вопрос', ignore_case=True))
+async def yn(message: types.Message):
+    await message.reply(choice(['Да', "Нет", "Это не важно", "Успокойся", "Не спрашивай такое", "Да, хотя зря",
+                                "Никогда", "100%", "1 из 100", "Спроси еще раз"]))
+
+
+@dp.message_handler(commands='sex')
+async def yn(message: types.Message):
+    await message.reply(f'У тебя будет {choice(["жесткий", "медленный", "быстрый", "приятный", "неприятный", "необычный", "романтичный"])} секс с {choice(users).name}')
+
+
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
