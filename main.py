@@ -1,6 +1,7 @@
 import random
 
 from aiogram import Bot, Dispatcher, executor, types
+from aiogram.dispatcher import filters
 from get_users import users
 from emoji import emojize
 from random import randint, choice
@@ -109,6 +110,11 @@ async def kill_sbd(message: types.Message):
     else:
         await bot.send_message(message.chat.id,
                                f'До использования команды заново осталось {wait_seconds - delta.seconds} секунд')
+
+
+@dp.message_handler(filters.Text(startswith='Совместимость', ignore_case=True))
+async def connection(message: types.Message):
+    await message.reply(f'Ты и {message.text[14::]} вместе с шансом {randint(0, 100)}%')
 
 
 if __name__ == '__main__':
