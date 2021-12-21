@@ -9,7 +9,7 @@ users = []
 channel_id = -1001458827756
 
 
-@dataclass
+@dataclass(order=True)
 class user:
     user_id: int
     name: str
@@ -38,3 +38,4 @@ for participant in client.get_participants(channel_id):
 # for participant in client.iter_participants(channel_id, aggressive=True):
 #     users.append(user(participant.id, participant.first_name, participant.last_name))
 client.disconnect()
+users.sort()

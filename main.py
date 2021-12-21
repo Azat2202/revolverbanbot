@@ -54,6 +54,7 @@ async def solo_horo(message: types.Message):
     else:
         await bot.send_message(message.chat.id,
                                f'До использования команды заново осталось {(wait_seconds_for_horo - delta.seconds) // 3600} часов')
+    await bot.delete_message(message.chat.id, message.message_id)
 
 
 @dp.message_handler(commands=['mark_all'])
@@ -71,6 +72,7 @@ async def mark_all(message: types.Message):
     else:
         await bot.send_message(message.chat.id,
                                f'До использования команды заново осталось {(wait_seconds_for_mention - delta.seconds) // 3600} часов')
+    await bot.delete_message(message.chat.id, message.message_id)
 
 
 @dp.message_handler(commands=['horo'])
@@ -101,25 +103,22 @@ async def kill_sbd(message: types.Message):
             massive[num1] = 0
             massive[num2] = 0
             await bot.edit_message_text(form_repr(num_to_ban), message.chat.id, last_message.message_id)
-        sleep(4)
+        sleep(2)
+        await bot.delete_message(message.chat.id, message.message_id)
         await bot.edit_message_text(
             f'{users[num_to_ban].name} {"" if users[num_to_ban].surname is None else " " + str(users[num_to_ban].surname) + " "}забанен на 5 минут{emojize(":smiling_face_with_horns:")}',
             message.chat.id, last_message.message_id)
         await bot.restrict_chat_member(message.chat.id, users[num_to_ban].user_id, can_send_messages=False,
                                        until_date=int((time() + 300)))
     else:
+        await bot.delete_message(message.chat.id, message.message_id)
         await bot.send_message(message.chat.id,
                                f'До использования команды заново осталось {wait_seconds - delta.seconds} секунд')
 
 
 @dp.message_handler(filters.Text(startswith='Совместимость', ignore_case=True))
 async def connection(message: types.Message):
-    if message.from_user.id == 765481347 and message.text[14::] == 'Азат':
-        await message.reply(f'Ты и {message.text[14::]} вместе с шансом 100 %')
-    elif message.from_user.id == 444473548 and message.text[14::] == 'Малика':
-        await message.reply(f'Ты и {message.text[14::]} вместе с шансом 100 %')
-    else:
-        await message.reply(f'Ты и {message.text[14::]} вместе с шансом {randint(0, 100)}%')
+    await message.reply(f'Ты и {message.text[14::]} вместе с шансом {randint(0, 100)}%')
 
 
 @dp.message_handler(filters.Text(startswith='Вопрос', ignore_case=True))
