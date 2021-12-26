@@ -6,11 +6,10 @@ from get_users import users
 from emoji import emojize
 from random import randint, choice
 from time import sleep, time
-from wishes import get_wishes
+from wishes import get_wishes, get_true, get_action
 import datetime
 import requests
 from bs4 import BeautifulSoup
-
 
 API_TOKEN = '5098673114:AAHTLpXaLEBKsVyZChzzDO0u1_B2OqflwfQ'
 
@@ -129,6 +128,26 @@ async def yn(message: types.Message):
     await message.reply(choice(['Да', "Нет"]))
 
 
+@dp.message_handler(filters.Text(startswith='Правда', ignore_case=True))
+async def yn(message: types.Message):
+    await message.reply(get_true())
+
+
+@dp.message_handler(commands='truth')
+async def yn(message: types.Message):
+    await message.reply(get_true())
+
+
+@dp.message_handler(commands='dare')
+async def yn(message: types.Message):
+    await message.reply(get_action())
+
+
+@dp.message_handler(filters.Text(startswith='Действие', ignore_case=True))
+async def yn(message: types.Message):
+    await message.reply(get_action())
+
+
 @dp.message_handler(filters.Text(startswith='Важный вопрос', ignore_case=True))
 async def yn(message: types.Message):
     await message.reply(choice(['Да', "Нет", "Это не важно", "Успокойся", "Не спрашивай такое", "Да, хотя зря",
@@ -137,7 +156,8 @@ async def yn(message: types.Message):
 
 @dp.message_handler(commands='sex')
 async def yn(message: types.Message):
-    await message.reply(f'У тебя будет {choice(["жесткий", "медленный", "быстрый", "приятный", "неприятный", "необычный", "романтичный"])} секс с {choice(users).name}')
+    await message.reply(
+        f'У тебя будет {choice(["жесткий", "медленный", "быстрый", "приятный", "неприятный", "необычный", "романтичный"])} секс с {choice(users).name}')
 
 
 @dp.message_handler(commands='anek')
