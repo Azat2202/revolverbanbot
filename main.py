@@ -8,6 +8,9 @@ from random import randint, choice
 from time import sleep, time
 from wishes import get_wishes
 import datetime
+import requests
+from bs4 import BeautifulSoup
+
 
 API_TOKEN = '5098673114:AAHTLpXaLEBKsVyZChzzDO0u1_B2OqflwfQ'
 
@@ -135,6 +138,15 @@ async def yn(message: types.Message):
 @dp.message_handler(commands='sex')
 async def yn(message: types.Message):
     await message.reply(f'У тебя будет {choice(["жесткий", "медленный", "быстрый", "приятный", "неприятный", "необычный", "романтичный"])} секс с {choice(users).name}')
+
+
+@dp.message_handler(commands='anek')
+async def anek(message: types.Message):
+    anek_url = 'https://baneks.ru/random'
+    response = requests.get(anek_url)
+    soup = BeautifulSoup(response.text, 'lxml')
+    joke = soup.find('article')
+    await message.reply(joke.text)
 
 
 if __name__ == '__main__':
