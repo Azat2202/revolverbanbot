@@ -345,7 +345,7 @@ async def kill_sbd(message: types.Message):
 
 @dp.message_handler(filters.Text(startswith='Совместимость', ignore_case=True))
 async def connection(message: types.Message):
-    if message.from_user.id == 782858155 and message.text[14::].rstrip in ('Марго', 'Маргаритта', 'Маргарита Феликсовна'):
+    if message.from_user.id == 782858155 and message.text[14::] in ('Марго', 'Маргаритта', 'Маргарита Феликсовна', 'марго'):
         await message.reply(f'Ты и {message.text[14::]} вместе с шансом 100%')
     else:
         await message.reply(f'Ты и {message.text[14::]} вместе с шансом {randint(0, 100)}%')
