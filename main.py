@@ -28,6 +28,11 @@ last_time_mentioned = datetime.datetime.now() - datetime.timedelta(seconds=wait_
 massive = [1 for i in users]
 
 
+# TODO:
+# 1) Отметки в свадьбе
+# 2) Шведские браки
+
+
 class WeddingDb:
     def __init__(self, database):
         import os.path
@@ -93,7 +98,8 @@ class WeddingDb:
                 f'Для заключения брака так же необходимы два свидетеля\n'
                 f'Согласие: :check_mark_button:\n'
                 f'Первый свидетель: {":check_mark_button:" if data[3] else ":cross_mark:"}\n'
-                f'Второй свидетель: {":check_mark_button:" if data[4] else ":cross_mark:"})'), reply_markup=form_inline_kb(agreement=False))
+                f'Второй свидетель: {":check_mark_button:" if data[4] else ":cross_mark:"})'),
+                reply_markup=form_inline_kb(agreement=False))
 
     async def marriage_disagree(self, call):
         data = self.cursor.execute("SELECT * FROM marriages WHERE chat_id = (?) and message_id = (?)",
@@ -118,16 +124,18 @@ class WeddingDb:
         if time_delta.seconds > 600:
             await call.answer("Прошло слишком много времени, свидетелем стать нельзя!")
             await call.message.edit_text(
-                emoji.emojize(f"{self.__get_name(data[0])} и {self.__get_name(data[1])} не нашли свидетелей:alarm_clock::"))
+                emoji.emojize(
+                    f"{self.__get_name(data[0])} и {self.__get_name(data[1])} не нашли свидетелей:alarm_clock::"))
             return
         if not data[3]:  # Первый свидетель
             self.cursor.execute(f"UPDATE marriages SET witness1 = (?) WHERE chat_id = (?) and message_id = (?)",
                                 (call.from_user.id, call.message.chat.id, call.message.message_id))
             await call.answer("Теперь вы свидетель!")
             await call.message.edit_text(emoji.emojize(f'Для заключения брака так же необходимы два свидетеля\n'
-                f'Согласие: {":check_mark_button:" if data[8] == 1 else ":cross_mark:"}\n'
-                f'Первый свидетель: :check_mark_button:\n'
-                f'Второй свидетель: :cross_mark:'), reply_markup=form_inline_kb(agreement=False if data[8] == 1 else True))
+                                                       f'Согласие: {":check_mark_button:" if data[8] == 1 else ":cross_mark:"}\n'
+                                                       f'Первый свидетель: :check_mark_button:\n'
+                                                       f'Второй свидетель: :cross_mark:'),
+                                         reply_markup=form_inline_kb(agreement=False if data[8] == 1 else True))
             self.__add_new_user(call.from_user.id, call.from_user.first_name, call.from_user.last_name)
         elif not data[4]:
             self.cursor.execute(f"UPDATE marriages SET witness2 = (?) WHERE chat_id = (?) and "
@@ -142,9 +150,10 @@ class WeddingDb:
                     f"Поздравляем молодоженов! {self.__get_name(data[0])} и {self.__get_name(data[1])} теперь в браке!")
             else:
                 await call.message.edit_text(emoji.emojize(f'Для заключения брака осталось согласие\n'
-                f'Согласие: :cross_mark:\n'
-                f'Первый свидетель: :check_mark_button:\n'
-                f'Второй свидетель: :check_mark_button:'), reply_markup=form_inline_kb(witness=False))
+                                                           f'Согласие: :cross_mark:\n'
+                                                           f'Первый свидетель: :check_mark_button:\n'
+                                                           f'Второй свидетель: :check_mark_button:'),
+                                             reply_markup=form_inline_kb(witness=False))
             self.__add_new_user(call.from_user.id, call.from_user.first_name, call.from_user.last_name)
         self.connection.commit()
 
@@ -157,11 +166,27 @@ class WeddingDb:
                 num += 1
                 time_obj = datetime.datetime.now() - datetime.datetime.strptime(line[2], "%y-%m-%d %H:%M:%S")
                 out += f'{num}. {self.__get_name(line[0])} и {self.__get_name(line[1])} - {beautiful_time_repr(time_obj)}\n'
-                out += f'   Свидетели: {self.__get_name(line[3])} и {self.__get_name(line[4])}'
+                out += f'   Свидетели: {self.__get_name(line[3])} и {self.__get_name(line[4])}\n'
         out += f'\nВсего {num} браков'
         if num == 0:
             out = 'В этой группе еще нет ни одного брака!'
         await msg.reply(out)
+
+    async def divorce(self, msg: types.Message):
+        data = self.cursor.execute("SELECT * FROM marriages WHERE chat_id = (?) and (user1 = (?) or user2 = (?))",
+                                   (msg.chat.id, msg.from_user.id, msg.from_user.id)).fetchone()
+        if not data:
+            await msg.reply('Вы не состоите в браке!')
+            return
+        inline_divorce_agreement = InlineKeyboardButton('Да', callback_data=f'divorce {data[5]} {data[0]} {data[1]}')
+        inline_divorce_refusal = InlineKeyboardButton('Отмена', callback_data=f'not_divorce {msg}')
+        inline_divorce_kb = InlineKeyboardMarkup().add(inline_divorce_agreement, inline_divorce_refusal)
+        await msg.reply('Вы уверены что собираетесь развестись?', reply_markup=inline_divorce_kb)
+
+    async def del_marriage(self, call, chat_id, user1, user2):
+        self.cursor.execute("DELETE FROM marriages WHERE chat_id = (?) and user1 = (?)", (chat_id, user1))
+        call.answer('Вы успешно развелись')
+        call.message.edit_text(f'{self.__get_name(user1)} и {self.__get_name(user2)} развелись')
 
     def __get_name(self, user_id):
         data = self.cursor.execute("SELECT * FROM users WHERE id = (?)", (user_id,)).fetchone()
@@ -222,6 +247,19 @@ def form_inline_kb(agreement: bool = True, witness: bool = True) -> types.Inline
     return inline_wedding_kb
 
 
+@dp.callback_query_handler(lambda c: c.data[:7] == 'divorce')
+async def agreed(call: types.CallbackQuery):
+    db_worker = WeddingDb(db_name)
+    data = call.data.split()
+    await db_worker.del_marriage(call, data[1], data[2], data[3])
+    db_worker.close()
+
+
+@dp.callback_query_handler(lambda c: c.data == 'not_divorce')
+async def agreed(call: types.CallbackQuery):
+    await call.message.edit_text('Развод отменен')
+
+
 @dp.callback_query_handler(lambda c: c.data == 'agreement')
 async def agreed(call: types.CallbackQuery):
     db_worker = WeddingDb(db_name)
@@ -245,7 +283,7 @@ async def refused(call: types.CallbackQuery):
 
 @dp.message_handler(filters.Text(equals='!Помощь', ignore_case=True))
 @dp.message_handler(commands='help')
-async def help_(message:types.Message):
+async def help_(message: types.Message):
     await message.reply('Список всех доступных команд:\n'
                         '/marry или !Брак - Заключить брак с человеком из чата\n'
                         '/divorce или !Развод - Развестись\n'
@@ -345,7 +383,8 @@ async def kill_sbd(message: types.Message):
 
 @dp.message_handler(filters.Text(startswith='Совместимость', ignore_case=True))
 async def connection(message: types.Message):
-    if message.from_user.id == 782858155 and message.text[14::] in ('Марго', 'Маргаритта', 'Маргарита Феликсовна', 'марго'):
+    if message.from_user.id == 782858155 and message.text[14::] in (
+    'Марго', 'Маргаритта', 'Маргарита Феликсовна', 'марго'):
         await message.reply(f'Ты и {message.text[14::]} вместе с шансом 100%')
     else:
         await message.reply(f'Ты и {message.text[14::]} вместе с шансом {randint(0, 100)}%')
@@ -415,6 +454,14 @@ async def new_marriage(message: types.Message):
 async def marriages_repr(message: types.Message):
     db_worker = WeddingDb(db_name)
     await db_worker.marriages_repr(message)
+    db_worker.close()
+
+
+@dp.message_handler(filters.Text(equals='!Развод', ignore_case=True))
+@dp.message_handler(commands='divorce')
+async def divorce(message: types.Message):
+    db_worker = WeddingDb(db_name)
+    await db_worker.divorce(message)
     db_worker.close()
 
 
