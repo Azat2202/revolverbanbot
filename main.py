@@ -183,10 +183,15 @@ class WeddingDb:
         inline_divorce_kb = InlineKeyboardMarkup().add(inline_divorce_agreement, inline_divorce_refusal)
         await msg.reply('Вы уверены что собираетесь развестись?', reply_markup=inline_divorce_kb)
 
-    async def del_marriage(self, call, chat_id, user1, user2):
+    async def del_marriage(self, call:types.CallbackQuery, chat_id, user1, user2):
+        data = self.cursor.execute("SELECT * FROM marriages WHERE chat_id = (?) and (user1 = (?) or user2 = (?))",
+                                   (call.message.chat.id, user1, user1)).fetchone()
+        if data[0] != call.from_user.id and data[1] != call.from_user.id:
+            await call.answer('Вопрос не вам')
+            return
         self.cursor.execute("DELETE FROM marriages WHERE chat_id = (?) and user1 = (?)", (chat_id, user1))
-        call.answer('Вы успешно развелись')
-        call.message.edit_text(f'{self.__get_name(user1)} и {self.__get_name(user2)} развелись')
+        await call.answer('Вы успешно развелись')
+        await call.message.edit_text(f'{self.__get_name(user1)} и {self.__get_name(user2)} развелись')
 
     def __get_name(self, user_id):
         data = self.cursor.execute("SELECT * FROM users WHERE id = (?)", (user_id,)).fetchone()
