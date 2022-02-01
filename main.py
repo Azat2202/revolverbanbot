@@ -13,10 +13,10 @@ import datetime
 import requests
 from bs4 import BeautifulSoup
 import sqlite3
+import os
 
-API_TOKEN = '5098673114:AAHTLpXaLEBKsVyZChzzDO0u1_B2OqflwfQ'
+API_TOKEN = os.getenv("API_TOKEN")
 db_name = 'wedding_users.db'
-
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 wait_seconds = 1800
@@ -41,23 +41,136 @@ class WeddingDb:
         self.connection = sqlite3.connect(db_path)
         self.cursor = self.connection.cursor()
 
-    def ismarried(self, user1, user2):
-        is_first_married = self.cursor.execute('SELECT 1 FROM marriages WHERE user1 = (?) OR user2 = (?)',
+    def is_married(self, user1, user2):
+        is_first_married = self.cursor.execute('SELECT 1 FROM marriages WHERE (user1 = (?) OR user2 = (?)) AND '
+                                               'betrothed = 1',
                                                (user1, user1)).fetchone()
-        is_second_married = self.cursor.execute('SELECT 1 FROM marriages WHERE user1 = (?) OR user2 = (?)',
+        is_second_married = self.cursor.execute('SELECT 1 FROM marriages WHERE user1 = (?) OR user2 = (?) AND '
+                                                'betrothed = 1',
                                                 (user2, user2)).fetchone()
         if is_first_married or is_second_married:
             return True
         else:
             return False
 
+    def inc_message(self, user_id, chat_id, first_name, last_name):
+        self.__add_new_user(user_id, first_name, last_name)
+        data = self.cursor.execute("SELECT * FROM messages WHERE user_id = (?) AND chat_id = (?)",
+                                   (user_id, chat_id)).fetchone()
+        if data:
+            self.cursor.execute("UPDATE messages SET message_count = (?) WHERE user_id = (?) AND chat_id = (?)",
+                                (int(data[2]) + 1, user_id, chat_id))
+        else:
+            self.cursor.execute("INSERT OR IGNORE INTO messages VALUES (?, ?, 1, 0)", (user_id, chat_id))
+        self.connection.commit()
+
+    def inc_karma(self, user_id, chat_id):
+        data = self.cursor.execute("SELECT * FROM messages WHERE user_id = (?) AND chat_id = (?)",
+                                   (user_id, chat_id)).fetchone()
+        self.cursor.execute("UPDATE messages SET karma = (?) WHERE user_id = (?) AND chat_id = (?)",
+                            (int(data[3]) + 1, user_id, chat_id))
+
+    def dec_karma(self, user_id, chat_id):
+        data = self.cursor.execute("SELECT * FROM messages WHERE user_id = (?) AND chat_id = (?)",
+                                   (user_id, chat_id)).fetchone()
+        self.cursor.execute("UPDATE messages SET karma = (?) WHERE user_id = (?) AND chat_id = (?)",
+                            (int(data[3]) - 1, user_id, chat_id))
+
+    async def message_repr(self, msg: types.Message):
+        data = self.cursor.execute("SELECT * FROM messages WHERE chat_id = (?)", (msg.chat.id,)).fetchall()
+        data.sort(key=lambda s: s[2], reverse=True)
+        out = 'Топ пользователей по написанным сообщениям: \n'
+        num = 1
+        for user in data:
+            count = int(user[2])
+            if count > 500_000:
+                rank = 'Государственный советник'
+            elif count > 250_000:
+                rank = 'Маршал'
+            elif count > 250_000:
+                rank = 'Генерал'
+            elif count > 100_000:
+                rank = 'Генерал полковник'
+            elif count > 75_000:
+                rank = 'Генерал лейтенант'
+            elif count > 50_000:
+                rank = 'Генерал майор'
+            elif count > 25_000:
+                rank = 'Полковник'
+            elif count > 10_000:
+                rank = 'Подполковник'
+            elif count > 7_500:
+                rank = 'Майор'
+            elif count > 5_000:
+                rank = 'Капитан'
+            elif count > 2500:
+                rank = 'Лейтенант'
+            elif count > 1000:
+                rank = 'Прапорщик'
+            elif count > 750:
+                rank = 'Старшина'
+            elif count > 500:
+                rank = 'Сержант'
+            elif count > 250:
+                rank = 'Ефрейтор'
+            else:
+                rank = 'Рядовой'
+            out += f'{num}. {rank} {self.__get_name(user[0])} - {count} сообщений\n'
+            num += 1
+        await bot.send_message(msg.chat.id, out)
+        await bot.delete_message(msg.chat.id, msg.message_id)
+
+    async def karma_repr(self, msg: types.Message):
+        out = 'Топ кармы: \n'
+        data = self.cursor.execute("SELECT * FROM messages WHERE chat_id = (?)", (msg.chat.id,)).fetchall()
+        data.sort(key=lambda s: s[3], reverse=True)
+        num = 1
+        for user in data:
+            karma = int(user[3])
+            if karma > 7500:
+                karma = 'Высший разум'
+            elif karma > 5000:
+                rank = 'Искусственный интеллект'
+            elif karma > 2500:
+                rank = 'Гений'
+            elif karma > 1000:
+                rank = 'Оракул'
+            elif karma > 760:
+                rank = 'Просветленный'
+            elif karma > 500:
+                rank = 'Мудрец'
+            elif karma > 250:
+                rank = 'Мыслитель'
+            elif karma > 100:
+                rank = 'Гуру'
+            elif karma > 75:
+                rank = 'Мастер'
+            elif karma > 50:
+                rank = 'Профи'
+            elif karma > 25:
+                rank = 'Знаток'
+            elif karma > 10:
+                rank = 'Ученик'
+            else:
+                rank = 'Новичок'
+            out += f'{num}. {rank} {self.__get_name(user[0])} - {karma}\n'
+            num += 1
+        await bot.send_message(msg.chat.id, out)
+        await bot.delete_message(msg.chat.id, msg.message_id)
+
     async def registrate_new_marriage(self, msg: types.Message):
         sent_msg = await msg.reply(
-            emoji.emojize(f'{get_name(msg)}, вы согласны заключить брак с {get_name(msg.reply_to_message)}?\n'
+            emoji.emojize(f'[{get_name(msg.reply_to_message)}](tg://user?id={msg.reply_to_message.from_user.id}), вы '
+                          f'согласны заключить брак с [{get_name(msg)}](tg://user?id={msg.from_user.id})?\n '
                           f'Для заключения брака так же необходимы два свидетеля\n'
                           f'Согласие: :cross_mark:\n'
                           f'Первый свидетель: :cross_mark:\n'
-                          f'Второй свидетель: :cross_mark:'), reply_markup=form_inline_kb())
+                          f'Второй свидетель: :cross_mark:'), reply_markup=form_inline_kb(), parse_mode='Markdown')
+        data = self.cursor.execute(f"SELECT * FROM marriages WHERE (user1 = (?) OR user2 = (?)) AND chat_id = (?) AND "
+                                   f"betrothed = 0", (msg.from_user.id, msg.chat.id, msg.chat.id)).fetchall()
+        if data:
+            self.cursor.execute("DELTE FROM marriages WHERE (user1 = (?) OR user2 = (?)) AND chat_id = (?) AND "
+                                "betrothed = 0", (msg.from_user.id, msg.chat.id))
         self.cursor.execute(f'''INSERT INTO marriages (user1, user2, date, chat_id, message_id, betrothed, agreed) VALUES 
                                 (?, ?, ?, ?, ?, ?, ?)''', (msg.from_user.id, msg.reply_to_message.from_user.id,
                                                            datetime.datetime.now().strftime("%y-%m-%d %H:%M:%S"),
@@ -99,7 +212,7 @@ class WeddingDb:
                 f'Согласие: :check_mark_button:\n'
                 f'Первый свидетель: {":check_mark_button:" if data[3] else ":cross_mark:"}\n'
                 f'Второй свидетель: {":check_mark_button:" if data[4] else ":cross_mark:"})'),
-                reply_markup=form_inline_kb(agreement=False))
+                reply_markup=form_inline_kb(agreement=False), parse_mode='Markdown')
 
     async def marriage_disagree(self, call):
         data = self.cursor.execute("SELECT * FROM marriages WHERE chat_id = (?) and message_id = (?)",
@@ -110,7 +223,9 @@ class WeddingDb:
         self.cursor.execute("DELETE FROM marriages WHERE chat_id = (?) and message_id = (?)",
                             (call.message.chat.id, call.message.message_id))
         await call.message.edit_reply_markup()
-        await call.message.edit_text(f"{self.__get_name(data[1])} отказал в браке {self.__get_name(data[0])}")
+        await call.message.edit_text(
+            f"[{self.__get_name(data[1])}](tg://user?id={data[0]}) отказал в браке [{self.__get_name(data[0])}](tg://user?id={data[0]})",
+            parse_mode='Markdown')
         self.connection.commit()
 
     async def marriage_witness(self, call: types.CallbackQuery):
@@ -125,17 +240,28 @@ class WeddingDb:
             await call.answer("Прошло слишком много времени, свидетелем стать нельзя!")
             await call.message.edit_text(
                 emoji.emojize(
-                    f"{self.__get_name(data[0])} и {self.__get_name(data[1])} не нашли свидетелей:alarm_clock::"))
+                    f"[{self.__get_name(data[0])}](tg://user?id={data[0]}) и [{self.__get_name(data[1])}](tg://user?id={data[1]}) не нашли свидетелей:alarm_clock::"),
+                parse_mode='Markdown')
             return
         if not data[3]:  # Первый свидетель
             self.cursor.execute(f"UPDATE marriages SET witness1 = (?) WHERE chat_id = (?) and message_id = (?)",
                                 (call.from_user.id, call.message.chat.id, call.message.message_id))
             await call.answer("Теперь вы свидетель!")
-            await call.message.edit_text(emoji.emojize(f'Для заключения брака так же необходимы два свидетеля\n'
-                                                       f'Согласие: {":check_mark_button:" if data[8] == 1 else ":cross_mark:"}\n'
-                                                       f'Первый свидетель: :check_mark_button:\n'
-                                                       f'Второй свидетель: :cross_mark:'),
-                                         reply_markup=form_inline_kb(agreement=False if data[8] == 1 else True))
+            if data[8]:
+                await call.message.edit_text(emoji.emojize(
+                    f'[{self.__get_name(data[1])}](tg://user?id={data[1]}), вы согласны заключить брак с [{self.__get_name(data[0])}](tg://user?id={data[0]})?\n'
+                    f'Для заключения брака так же необходимы два свидетеля\n'
+                    f'Согласие: {":check_mark_button:" if data[8] == 1 else ":cross_mark:"}\n'
+                    f'Первый свидетель: :check_mark_button:\n'
+                    f'Второй свидетель: :cross_mark:'),
+                    reply_markup=form_inline_kb(agreement=False if data[8] == 1 else True),
+                    parse_mode='Markdown')
+            else:
+                await call.message.edit_text(emoji.emojize(f'Для заключения брака так же необходимы два свидетеля\n'
+                                                           f'Согласие: {":check_mark_button:" if data[8] == 1 else ":cross_mark:"}\n'
+                                                           f'Первый свидетель: :check_mark_button:\n'
+                                                           f'Второй свидетель: :cross_mark:'),
+                                             reply_markup=form_inline_kb(agreement=False if data[8] == 1 else True))
             self.__add_new_user(call.from_user.id, call.from_user.first_name, call.from_user.last_name)
         elif not data[4]:
             self.cursor.execute(f"UPDATE marriages SET witness2 = (?) WHERE chat_id = (?) and "
@@ -147,7 +273,8 @@ class WeddingDb:
                                     f"message_id = (?)",
                                     (1, call.message.chat.id, call.message.message_id))
                 await call.message.edit_text(
-                    f"Поздравляем молодоженов! {self.__get_name(data[0])} и {self.__get_name(data[1])} теперь в браке!")
+                    f"Поздравляем молодоженов! [{self.__get_name(data[0])}](tg://user?id={data[0]}) и [{self.__get_name(data[1])}](tg://user?id={data[1]}) теперь в браке!",
+                    parse_mode='Markdown')
             else:
                 await call.message.edit_text(emoji.emojize(f'Для заключения брака осталось согласие\n'
                                                            f'Согласие: :cross_mark:\n'
@@ -158,19 +285,19 @@ class WeddingDb:
         self.connection.commit()
 
     async def marriages_repr(self, msg: types.Message):
-        data = self.cursor.execute("SELECT * FROM marriages WHERE betrothed = 1").fetchall()
+        data = self.cursor.execute("SELECT * FROM marriages WHERE betrothed = 1 ORDER BY date").fetchall()
         out = 'Статистика по бракам:\n'
         num = 0
         for line in data:
             if line[5] == msg.chat.id:
                 num += 1
                 time_obj = datetime.datetime.now() - datetime.datetime.strptime(line[2], "%y-%m-%d %H:%M:%S")
-                out += f'{num}. {self.__get_name(line[0])} и {self.__get_name(line[1])} - {beautiful_time_repr(time_obj)}\n'
+                out += f'{num}. [{self.__get_name(line[0])}](tg://user?id={line[0]}) и [{self.__get_name(line[1])}](tg://user?id={line[1]}) - {beautiful_time_repr(time_obj)}\n'
                 out += f'   Свидетели: {self.__get_name(line[3])} и {self.__get_name(line[4])}\n'
         out += f'\nВсего {num} браков'
         if num == 0:
             out = 'В этой группе еще нет ни одного брака!'
-        await msg.reply(out)
+        await msg.reply(out, parse_mode='Markdown')
 
     async def divorce(self, msg: types.Message):
         data = self.cursor.execute("SELECT * FROM marriages WHERE chat_id = (?) and (user1 = (?) or user2 = (?))",
@@ -178,24 +305,32 @@ class WeddingDb:
         if not data:
             await msg.reply('Вы не состоите в браке!')
             return
-        inline_divorce_agreement = InlineKeyboardButton('Да', callback_data=f'divorce {data[5]} {data[0]} {data[1]}')
-        inline_divorce_refusal = InlineKeyboardButton('Отмена', callback_data=f'not_divorce {msg}')
+        inline_divorce_agreement = InlineKeyboardButton('Да', callback_data=f'divorce {data[5]} {msg.from_user.id}')
+        inline_divorce_refusal = InlineKeyboardButton('Отмена', callback_data=f'not_divorce {msg.from_user.id}')
         inline_divorce_kb = InlineKeyboardMarkup().add(inline_divorce_agreement, inline_divorce_refusal)
         await msg.reply('Вы уверены что собираетесь развестись?', reply_markup=inline_divorce_kb)
 
-    async def del_marriage(self, call:types.CallbackQuery, chat_id, user1, user2):
-        data = self.cursor.execute("SELECT * FROM marriages WHERE chat_id = (?) and (user1 = (?) or user2 = (?))",
-                                   (call.message.chat.id, user1, user1)).fetchone()
-        if data[0] != call.from_user.id and data[1] != call.from_user.id:
-            await call.answer('Вопрос не вам')
+    async def del_marriage(self, call, chat_id, user_id):
+        if call.from_user.id != user_id:
+            await call.answer('Вы не можете подтвердить развод')
             return
-        self.cursor.execute("DELETE FROM marriages WHERE chat_id = (?) and user1 = (?)", (chat_id, user1))
-        await call.answer('Вы успешно развелись')
-        await call.message.edit_text(f'{self.__get_name(user1)} и {self.__get_name(user2)} развелись')
+        self.cursor.execute("DELETE FROM marriages WHERE chat_id = (?) AND (user1 = (?) OR user2 = (?))",
+                            (chat_id, user_id, user_id))
+        await call.message.edit_text("Вы развелись")
+
+    async def edit_divorce(self, call: types.CallbackQuery, user_id):
+        if user_id != call.from_user.id:
+            await call.answer('Вы не можете отменить развод!')
+            return
+        await call.message.edit_text("Развод отменен")
+        await call.answer()
 
     def __get_name(self, user_id):
         data = self.cursor.execute("SELECT * FROM users WHERE id = (?)", (user_id,)).fetchone()
-        return f"{data[1]}{' ' + data[2] if data[2] else ''}"
+        if data:
+            return f"{data[1]}{' ' + data[2] if data[2] else ''}"
+        else:
+            return ''
 
     def __add_new_user(self, user_id, name, surname):
         self.cursor.execute(f"INSERT OR IGNORE INTO users VALUES (?, ?, ?)", (user_id, name, surname))
@@ -204,6 +339,13 @@ class WeddingDb:
     def close(self):
         self.connection.commit()
         self.connection.close()
+
+
+def create_tables():
+    db_worker = WeddingDb(db_name)
+    db_worker.cursor.execute("CREATE TABLE IF NOT EXISTS messages (user_id INT NOT NULL, chat_id INT NOT NULL, "
+                             "message_count INT, karma INT);")
+    db_worker.close()
 
 
 def get_name(msg: types.Message):
@@ -256,13 +398,16 @@ def form_inline_kb(agreement: bool = True, witness: bool = True) -> types.Inline
 async def agreed(call: types.CallbackQuery):
     db_worker = WeddingDb(db_name)
     data = call.data.split()
-    await db_worker.del_marriage(call, data[1], data[2], data[3])
+    await db_worker.del_marriage(call, int(data[1]), int(data[2]))
     db_worker.close()
 
 
-@dp.callback_query_handler(lambda c: c.data == 'not_divorce')
+@dp.callback_query_handler(lambda c: c.data[:11] == 'not_divorce')
 async def agreed(call: types.CallbackQuery):
-    await call.message.edit_text('Развод отменен')
+    data = call.data.split()
+    db_worker = WeddingDb(db_name)
+    await db_worker.edit_divorce(call, int(data[1]))
+    db_worker.close()
 
 
 @dp.callback_query_handler(lambda c: c.data == 'agreement')
@@ -289,6 +434,9 @@ async def refused(call: types.CallbackQuery):
 @dp.message_handler(filters.Text(equals='!Помощь', ignore_case=True))
 @dp.message_handler(commands='help')
 async def help_(message: types.Message):
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    db_worker.close()
     await message.reply('Список всех доступных команд:\n'
                         '/marry или !Брак - Заключить брак с человеком из чата\n'
                         '/divorce или !Развод - Развестись\n'
@@ -303,12 +451,19 @@ async def help_(message: types.Message):
                         '/ban или !Бан - Забанить случайного человека\n'
                         '/horo или !Гороскоп - Получить индивидуальный гороскоп\n'
                         '/horo_for_all - Отправить гороскоп для всех\n'
-                        '/mark_all или !Сбор - Отметить всех участников\n')
+                        '/mark_all или !Сбор - Отметить всех участников\n'
+                        '+ или Спасибо - Повысить карму \n'
+                        '- или Пошел ... - Понизить карму\n'
+                        '/top_spamers или !Спамеры - Топ участников по сообщениям\n'
+                        '/top_karma или !Карма - Топ учатников по карме')
 
 
 @dp.message_handler(commands=['horo_for_all'])
 async def solo_horo(message: types.Message):
     global last_time_horo
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    db_worker.close()
     now_time = datetime.datetime.now()
     delta = now_time - last_time_horo
     out = ''
@@ -328,6 +483,9 @@ async def solo_horo(message: types.Message):
 @dp.message_handler(commands=['mark_all'])
 async def mark_all(message: types.Message):
     global last_time_mentioned
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    db_worker.close()
     now_time = datetime.datetime.now()
     delta = now_time - last_time_mentioned
     out = ''
@@ -347,6 +505,9 @@ async def mark_all(message: types.Message):
 @dp.message_handler(commands=['horo'])
 async def all_horo(message: types.Message):
     today_horo = get_wishes(users)
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    db_worker.close()
     out = f'{message.from_user.first_name}{"" if message.from_user.last_name is None else " " + str(message.from_user.last_name)}{choice(today_horo)}'
     await bot.send_message(message.chat.id, out, reply_to_message_id=message.message_id)
 
@@ -355,6 +516,9 @@ async def all_horo(message: types.Message):
 @dp.message_handler(commands=['ban'])
 async def kill_sbd(message: types.Message):
     global last_time_banned, massive
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    db_worker.close()
     now_time = datetime.datetime.now()
     delta = now_time - last_time_banned
     if delta.seconds > wait_seconds or delta.days > 0:
@@ -388,8 +552,11 @@ async def kill_sbd(message: types.Message):
 
 @dp.message_handler(filters.Text(startswith='Совместимость', ignore_case=True))
 async def connection(message: types.Message):
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    db_worker.close()
     if message.from_user.id == 782858155 and message.text[14::] in (
-    'Марго', 'Маргаритта', 'Маргарита Феликсовна', 'марго'):
+            'Марго', 'Маргаритта', 'Маргарита Феликсовна', 'марго'):
         await message.reply(f'Ты и {message.text[14::]} вместе с шансом 100%')
     else:
         await message.reply(f'Ты и {message.text[14::]} вместе с шансом {randint(0, 100)}%')
@@ -397,23 +564,35 @@ async def connection(message: types.Message):
 
 @dp.message_handler(filters.Text(startswith='Вопрос', ignore_case=True))
 async def yn(message: types.Message):
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    db_worker.close()
     await message.reply(choice(['Да', "Нет"]))
 
 
 @dp.message_handler(commands='truth')
 @dp.message_handler(filters.Text(startswith='!Правда', ignore_case=True))
 async def yn(message: types.Message):
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    db_worker.close()
     await message.reply(get_true())
 
 
 @dp.message_handler(filters.Text(startswith='!Действие', ignore_case=True))
 @dp.message_handler(commands='dare')
 async def yn(message: types.Message):
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    db_worker.close()
     await message.reply(get_action())
 
 
 @dp.message_handler(filters.Text(startswith='Важный вопрос', ignore_case=True))
 async def yn(message: types.Message):
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    db_worker.close()
     await message.reply(choice(['Да', "Нет", "Это не важно", "Успокойся", "Не спрашивай такое", "Да, хотя зря",
                                 "Никогда", "100%", "1 из 100", "Спроси еще раз"]))
 
@@ -421,6 +600,9 @@ async def yn(message: types.Message):
 @dp.message_handler(filters.Text(equals='!Секс', ignore_case=True))
 @dp.message_handler(commands='sex')
 async def yn(message: types.Message):
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    db_worker.close()
     await message.reply(
         f'У тебя будет {choice(["жесткий", "медленный", "быстрый", "приятный", "неприятный", "необычный", "романтичный"])} секс с {choice(users).name}')
 
@@ -428,6 +610,9 @@ async def yn(message: types.Message):
 @dp.message_handler(filters.Text(equals='!Анекдот', ignore_case=True))
 @dp.message_handler(commands='anek')
 async def anek(message: types.Message):
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    db_worker.close()
     anek_url = 'https://baneks.ru/random'
     response = requests.get(anek_url)
     soup = BeautifulSoup(response.text, 'lxml')
@@ -438,9 +623,12 @@ async def anek(message: types.Message):
 @dp.message_handler(filters.Text(equals='!Брак', ignore_case=True))
 @dp.message_handler(commands=['marry'])
 async def new_marriage(message: types.Message):
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    db_worker.close()
     if message.reply_to_message:
         db_worker = WeddingDb(db_name)
-        if db_worker.ismarried(message.from_user.id, message.reply_to_message.from_user.id):
+        if db_worker.is_married(message.from_user.id, message.reply_to_message.from_user.id):
             await message.reply('Вы уже состоите в браке!')
             db_worker.close()
             return
@@ -458,6 +646,7 @@ async def new_marriage(message: types.Message):
 @dp.message_handler(commands='marriages')
 async def marriages_repr(message: types.Message):
     db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
     await db_worker.marriages_repr(message)
     db_worker.close()
 
@@ -466,9 +655,63 @@ async def marriages_repr(message: types.Message):
 @dp.message_handler(commands='divorce')
 async def divorce(message: types.Message):
     db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
     await db_worker.divorce(message)
     db_worker.close()
 
 
+@dp.message_handler(commands='top_spamers')
+@dp.message_handler(filters.Text(equals='!Спамеры', ignore_case=True))
+async def spamers_repr(message: types.Message):
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    await db_worker.message_repr(message)
+    db_worker.close()
+
+
+@dp.message_handler(commands='top_karma')
+@dp.message_handler(filters.Text(equals='!Карма', ignore_case=True))
+async def spamers_repr(message: types.Message):
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    await db_worker.karma_repr(message)
+    db_worker.close()
+
+
+@dp.message_handler(filters.Text(equals='+', ignore_case=True))
+@dp.message_handler(filters.Text(equals='Спасибо', ignore_case=True))
+async def plus_karma(message: types.Message):
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    if message.reply_to_message:
+        db_worker.inc_karma(message.reply_to_message.from_user.id, message.chat.id)
+        await message.reply('Карма увеличена!')
+    else:
+        await message.reply('Увеличить карму можно ответом на сообщение')
+    db_worker.close()
+
+
+@dp.message_handler(filters.Text(equals='Идиот', ignore_case=True))
+@dp.message_handler(filters.Text(equals='-', ignore_case=True))
+@dp.message_handler(filters.Text(startswith='Пошел нахуй', ignore_case=True))
+async def plus_karma(message: types.Message):
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    if message.reply_to_message:
+        db_worker.dec_karma(message.reply_to_message.from_user.id, message.chat.id)
+        await message.reply('Карма уменьшена! ')
+    else:
+        await message.reply('Уменьшить карму можно ответом на сообщение')
+    db_worker.close()
+
+
+@dp.message_handler()
+async def common_message(message: types.Message):
+    db_worker = WeddingDb(db_name)
+    db_worker.inc_message(message.from_user.id, message.chat.id, message.from_user.first_name, message.from_user.last_name)
+    db_worker.close()
+
+
 if __name__ == '__main__':
+    create_tables()
     executor.start_polling(dp, skip_updates=True)

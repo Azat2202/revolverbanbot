@@ -4,7 +4,7 @@ import sys
 import os
 import time
 
-API_TOKEN = '5098673114:AAHTLpXaLEBKsVyZChzzDO0u1_B2OqflwfQ'
+API_TOKEN_TELETHON = os.environ.get("API_TOKEN_TELETHON")
 users = []
 channel_id = -1001458827756
 
@@ -29,7 +29,9 @@ def get_env(name, message, cast=str):
             time.sleep(1)
 
 
-client = TelegramClient('session_name', 14494169, 'be46953bb44aec0cd51a8241e310d06e').start(bot_token=API_TOKEN)
+api_id = int(os.environ.get("api_id"))
+api_hash = os.environ.get("api_hash")
+client = TelegramClient('session_name', api_id, api_hash).start(bot_token=API_TOKEN_TELETHON)
 client.start()
 count = 0
 for participant in client.get_participants(channel_id):
